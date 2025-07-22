@@ -172,3 +172,4 @@ if __name__ == '__main__':
     process_location_sheet(input_sample_path, output_path)
     # Open the output file automatically after all processing is complete
     os.startfile(output_path)
+    print("The data transposition is complete and is saved as 'Output.xlsx'")
