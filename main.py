@@ -1,6 +1,7 @@
 import openpyxl
 from openpyxl.worksheet.datavalidation import DataValidation
 import os
+from API import run_api
 
 # Paths
 input_path = os.path.join('Excel Files', 'New Business Scope Sheet - Practice Locations and Providers.xlsx')
@@ -129,14 +130,102 @@ def write_board_cert_id_1_formula(output_path, sheet_name='Provider'):
         ws.cell(row=row, column=board_cert_id_col).value = formula
     wb.save(output_path)
 
+def write_professional_suffix_id_1_formula(output_path, sheet_name='Provider'):
+    import openpyxl
+    wb = openpyxl.load_workbook(output_path)
+    ws = wb[sheet_name]
+    header = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+    try:
+        suffix_id_col = header.index('Professional Suffix ID 1') + 1  # 1-based index
+        d_col_letter = 'D'  # Column D is the lookup value
+    except ValueError as e:
+        print(f"Column not found: {e}")
+        return
+    max_row = ws.max_row
+    for row in range(2, max_row + 1):
+        formula = f'=IFERROR(@XLOOKUP({d_col_letter}{row}, ValidationAndReference!G:G, ValidationAndReference!F:F, ""), "")'
+        ws.cell(row=row, column=suffix_id_col).value = formula
+    wb.save(output_path)
+
+def copy_location_ids_to_provider(input_file, output_file, input_sheet_name=None, output_sheet_name='Provider'):
+    """
+    Copy 'CORRECT Location' to 'Location ID 1', and 'Location ID 2-5' to 'Location ID 2-5' from input to output Provider sheet.
+    If any column or cell is missing, leave the output cell blank.
+    Highlight columns 'Location ID 1' through 'Location ID 5' for any row where 'Location ID 5' has a value.
+    Only keep as many rows in the output as there are data rows in the input. Print the number of providers to the terminal.
+    """
+    import openpyxl
+    from openpyxl.styles import PatternFill
+    wb_in = openpyxl.load_workbook(input_file)
+    wb_out = openpyxl.load_workbook(output_file)
+
+    ws_in = wb_in[input_sheet_name] if input_sheet_name else wb_in.worksheets[0]
+    ws_out = wb_out[output_sheet_name]
+
+    # Define mapping: input column -> output column
+    col_map = {
+        'CORRECT Location': 'Location ID 1',
+        'Location ID 2': 'Location ID 2',
+        'Location ID 3': 'Location ID 3',
+        'Location ID 4': 'Location ID 4',
+        'Location ID 5': 'Location ID 5',
+    }
+
+    # Get headers
+    in_header = [cell.value for cell in next(ws_in.iter_rows(min_row=1, max_row=1))]
+    out_header = [cell.value for cell in next(ws_out.iter_rows(min_row=1, max_row=1))]
+
+    # Get column indices (1-based)
+    in_col_indices = {k: (in_header.index(k) + 1 if k in in_header else None) for k in col_map.keys()}
+    out_col_indices = {v: (out_header.index(v) + 1 if v in out_header else None) for v in col_map.values()}
+
+    # Prepare highlight fill (yellow)
+    highlight_fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')
+
+    # Determine number of data rows in input (excluding header)
+    input_data_rows = ws_in.max_row - 1
+    print(f"Number of providers in the batch: {input_data_rows}")
+
+    # Copy values row by row (starting from row 2)
+    for row_idx in range(2, ws_in.max_row + 1):
+        # Track if Location ID 5 has a value for this row
+        location_id_5_value = None
+        for in_col, out_col in col_map.items():
+            in_idx = in_col_indices[in_col]
+            out_idx = out_col_indices[out_col]
+            value = None
+            if in_idx is not None and out_idx is not None:
+                value = ws_in.cell(row=row_idx, column=in_idx).value
+                ws_out.cell(row=row_idx, column=out_idx, value=value if value is not None else None)
+            elif out_idx is not None:
+                ws_out.cell(row=row_idx, column=out_idx, value=None)
+            if out_col == 'Location ID 5':
+                location_id_5_value = value
+        # If Location ID 5 has a value, highlight Location ID 1-5 for this row
+        if location_id_5_value not in [None, '']:
+            for out_col in ['Location ID 1', 'Location ID 2', 'Location ID 3', 'Location ID 4', 'Location ID 5']:
+                out_idx = out_col_indices[out_col]
+                if out_idx is not None:
+                    ws_out.cell(row=row_idx, column=out_idx).fill = highlight_fill
+
+    # Remove extra rows from output Provider sheet
+    output_data_rows = ws_out.max_row - 1
+    if output_data_rows > input_data_rows:
+        ws_out.delete_rows(input_data_rows + 2, output_data_rows - input_data_rows)
+
+    wb_out.save(output_file)
+
 if __name__ == '__main__':
+    run_api()
     main()
-    # After creating Output.xlsx, copy NPI values
-    from NPI import copy_npi_column
+    # Copy location IDs to Provider sheet
     input_sample_path = os.path.join('Excel Files', 'Grow Therapy - Sample Data.xlsx')
     output_path = os.path.join('Excel Files', 'Output.xlsx')
+    copy_location_ids_to_provider(input_sample_path, output_path, output_sheet_name='Provider')
+    # After creating Output.xlsx, copy NPI values
     from Name import copy_name_column
     copy_name_column(input_sample_path, output_path, output_sheet_name='Provider')
+    from NPI import copy_npi_column
     copy_npi_column(input_sample_path, output_path, output_sheet_name='Provider')
     from Gender import copy_gender_column
     copy_gender_column(input_sample_path, output_path, output_sheet_name='Provider')
@@ -167,9 +256,15 @@ if __name__ == '__main__':
     add_sub_board_certification_dropdowns(output_path, sheet_name='Provider')
     # Write Board Cert ID 1 formula
     write_board_cert_id_1_formula(output_path, sheet_name='Provider')
+    # Write Professional Suffix ID 1 formula
+    write_professional_suffix_id_1_formula(output_path, sheet_name='Provider')
     # Add Location sheet processing
     from Locationsheet import process_location_sheet
     process_location_sheet(input_sample_path, output_path)
     # Open the output file automatically after all processing is complete
-    os.startfile(output_path)
+    # os.startfile(output_path)
     print("The data transposition is complete and is saved as 'Output.xlsx'")
+
+# After Output.xlsx is created, run Specialtyapi.py
+import subprocess
+subprocess.run(["python", "Specialtyapi.py"], check=True)

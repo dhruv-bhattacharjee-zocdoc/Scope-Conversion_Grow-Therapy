@@ -59,17 +59,21 @@ def copy_professional_suffix(input_file, output_file, input_sheet_name=None, out
         # If the cell is empty, leave as is to preserve dropdown/data validation
 
     # Add dropdown to 'Professional Suffix 1', 'Professional Suffix 2', and 'Professional Suffix 3' for all relevant rows
-    dv = DataValidation(type="list", formula1="=ValidationAndReference!$G$2:$G$511", allow_blank=True)
+    dv1 = DataValidation(type="list", formula1="=ValidationAndReference!$G$2:$G$511", allow_blank=True)
+    dv2 = DataValidation(type="list", formula1="=ValidationAndReference!$G$2:$G$511", allow_blank=True)
+    dv3 = DataValidation(type="list", formula1="=ValidationAndReference!$G$2:$G$511", allow_blank=True)
     col_letter1 = get_column_letter(prof_suffix_col_out)
     col_letter2 = get_column_letter(prof_suffix2_col_out)
     col_letter3 = get_column_letter(prof_suffix3_col_out)
     dv_range1 = f"{col_letter1}2:{col_letter1}{max_row}"
     dv_range2 = f"{col_letter2}2:{col_letter2}{max_row}"
     dv_range3 = f"{col_letter3}2:{col_letter3}{max_row}"
-    dv.add(dv_range1)
-    dv.add(dv_range2)
-    dv.add(dv_range3)
-    ws_out.add_data_validation(dv)
+    dv1.add(dv_range1)
+    dv2.add(dv_range2)
+    dv3.add(dv_range3)
+    ws_out.add_data_validation(dv1)
+    ws_out.add_data_validation(dv2)
+    ws_out.add_data_validation(dv3)
 
     # Find the column index for 'Professional Suffix ID 1'
     try:
